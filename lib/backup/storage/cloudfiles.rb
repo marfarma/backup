@@ -20,14 +20,20 @@ module Backup
       ##
       # Rackspace Cloud Files container name and path
       attr_accessor :container, :path
+      
+      ##
+      # Additional "header" metadata
+      # Expects array in format [ ['X-Delete-After', 864000], ['X-Object-Meta-Source', 'my_hostname'] ]
+      attr_accessor :additional_metadata
 
       ##
       # Creates a new instance of the storage object
       def initialize(model, storage_id = nil, &block)
         super(model, storage_id)
 
-        @servicenet ||= false
-        @path       ||= 'backups'
+        @servicenet          ||= false
+        @path                ||= 'backups'
+        @additional_metadata ||= Array.new
 
         instance_eval(&block) if block_given?
       end
@@ -51,7 +57,13 @@ module Backup
           :rackspace_servicenet => servicenet
         )
       end
-
+      
+      ##
+      # Convert the additional metadata elements to hash
+      def user_metadata
+        Hash[additional_metadata.map {|key, value| [key, value]}]
+      end
+      
       ##
       # Transfers the archived file to the specified Cloud Files container
       def transfer!
@@ -59,10 +71,11 @@ module Backup
 
         files_to_transfer_for(@package) do |local_file, remote_file|
           Logger.message "#{storage_name} started transferring '#{ local_file }'."
+          options = user_metadata || {}
 
           File.open(File.join(local_path, local_file), 'r') do |file|
             connection.put_object(
-              container, File.join(remote_path, remote_file), file
+              container, File.join(remote_path, remote_file), file, options
             )
           end
         end
